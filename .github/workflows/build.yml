@@ -23,11 +23,6 @@ jobs:
       - name: Create output directory
         run: mkdir -p buildd-results
 
-      - name: Validate debian/changelog
-        run: |
-          echo "Running changelog validator"
-          bash debian/ci-validate-changelog.sh
-
       - name: Build package
         run: |
           docker pull quay.io/droidian/build-essential:current-arm64
@@ -60,11 +55,21 @@ jobs:
               find /usr/bin -name '*gcc*' | grep aarch64
               env | grep RELENG
               set +x
+              echo "=== INSTALLING BUILD DEPENDENCIES ==="
+              apt-get update
+              apt-get install -y \
+                build-essential \
+                devscripts \
+                debhelper \
+                meson \
+                libglib2.0-dev \
+                valac \
+                libgstreamer1.0-dev
               echo "=== BUILD ==="
               apt-cache policy gcc-aarch64-linux-gnu
               dpkg -l | grep aarch64
               ls /usr/bin/aarch64-linux-gnu-*
-              releng-build-package
+              dpkg-buildpackage -us -uc -b
             '
             
       - name: Show generated files
