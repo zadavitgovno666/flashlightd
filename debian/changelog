@@ -1,4 +1,4 @@
-flashlightd (14+z1_max_brightness) unstable; urgency=medium
+flashlightd (14+z1+max+brightness) unstable; urgency=medium
 
   * Initial release with max brightness feature
 
