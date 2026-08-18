@@ -23,6 +23,11 @@ jobs:
       - name: Create output directory
         run: mkdir -p buildd-results
 
+      - name: Validate debian/changelog
+        run: |
+          echo "Running changelog validator"
+          bash debian/ci-validate-changelog.sh
+
       - name: Build package
         run: |
           docker pull quay.io/droidian/build-essential:current-arm64
