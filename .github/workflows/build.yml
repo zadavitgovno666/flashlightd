@@ -1,0 +1,108 @@
+name: Build flashlightd (.deb)
+
+on:
+  push:
+    branches:
+      - '**'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  
+jobs:
+  build:
+    runs-on: ubuntu-24.04-arm
+
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Create output directory
+        run: mkdir -p buildd-results
+
+      - name: Build package
+        run: |
+          docker pull quay.io/droidian/build-essential:current-arm64
+
+          docker run --rm \
+            -e CI \
+            -e IS_CONTAINER=true \
+            -e CIRCLECI=true \
+            -e CIRCLE_BRANCH="${{ github.ref_name }}" \
+            -e CIRCLE_SHA1="${{ github.sha }}" \
+            -e CIRCLE_TAG="${{ github.ref_type == 'tag' && github.ref_name || '' }}" \
+            -e RELENG_HOST_ARCH=arm64 \
+            -v "${{ github.workspace }}:/buildd/sources" \
+            -v "${{ github.workspace }}/buildd-results:/buildd" \
+            quay.io/droidian/build-essential:current-arm64 \
+            /bin/bash -lc '
+              cd /buildd/sources
+              git config --global --add safe.directory /buildd/sources
+              echo "=== BEFORE BUILD ==="
+              git describe --tags --always || true
+              echo "git tag -l 'feature/*'"
+              git rev-parse feature/next/backport-0.18 || true
+              echo "=== TOOLCHAIN ==="    
+              set -x
+              which aarch64-linux-gnu-gcc
+              echo "which exit=$?"
+              dpkg -l | grep gcc-aarch64
+              echo "dpkg exit=$?"
+              find /usr/bin -name '*aarch64*'
+              find /usr/bin -name '*gcc*' | grep aarch64
+              env | grep RELENG
+              set +x
+              echo "=== BUILD ==="
+              apt-cache policy gcc-aarch64-linux-gnu
+              dpkg -l | grep aarch64
+              ls /usr/bin/aarch64-linux-gnu-*
+              releng-build-package
+            '
+            
+      - name: Show generated files
+        run: ls -lah buildd-results
+
+      - name: Upload flashlightd packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: flashlightd-debs
+          path: |
+            buildd-results/*.deb
+            buildd-results/*.ddeb
+            buildd-results/*.changes
+            buildd-results/*.buildinfo
+          if-no-files-found: error
+
+      - name: Get package version
+        id: package
+        run: |
+          DEB=$(find buildd-results -maxdepth 1 -name '*.deb' | head -n 1)
+
+          if [ -z "$DEB" ]; then
+            echo "ERROR: No .deb found"
+            exit 1
+          fi
+
+          VERSION=$(dpkg-deb -f "$DEB" Version)
+
+          echo "Package: $DEB"
+          echo "Version: $VERSION"
+
+          echo "deb=$DEB" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: build-${{ github.sha }}
+          name: ${{ steps.package.outputs.version }}
+          target_commitish: ${{ github.sha }}
+          generate_release_notes: false
+          files: |
+            buildd-results/*.deb
+            buildd-results/*.ddeb
+            buildd-results/*.changes
+            buildd-results/*.buildinfo
