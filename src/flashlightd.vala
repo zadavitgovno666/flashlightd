@@ -54,6 +54,23 @@ public class FlashlightServer : GLib.Object {
 
     Gst.StateChangeReturn result;
 
+    private static int get_max_brightness(string brightness_path) {
+        string max_brightness_path = brightness_path.replace("brightness", "max_brightness");
+        try {
+            uint8[] content;
+            string etag_out;
+            if (FileUtils.test(max_brightness_path, FileTest.EXISTS)) {
+                File file = File.new_for_path(max_brightness_path);
+                file.load_contents(null, out content, out etag_out);
+                var raw_content = ((string) content).strip();
+                return int.parse(raw_content);
+            }
+        } catch (Error e) {
+            // fallback to default
+        }
+        return 255; // default fallback
+    }
+
     private void set_flashlight() {
         // exynos devices cannot use our gst-droid plugin with droidcamsrc sink (at least not on droidian) and they use different values and different paths for flashlight in sysfs.
         // as a result cannot use the fallack sysfs backend or the gstreamer stuff so lets check if device is exynos and act accordingly.
@@ -96,7 +113,9 @@ public class FlashlightServer : GLib.Object {
                     if (file.query_exists()) {
                         try {
                             var out_stream = file.replace(null, false, FileCreateFlags.NONE, null);
-                            out_stream.write_all(Brightness.to_string().data, null);
+                            // Read max_brightness and write that if brightness > 0, otherwise write 0
+                            int brightness_to_write = Brightness > 0 ? get_max_brightness(path) : 0;
+                            out_stream.write_all(brightness_to_write.to_string().data, null);
                             out_stream.close();
                         } catch (Error e) {
                             // some paths might throw an error because of permissions we just want to ignore those
