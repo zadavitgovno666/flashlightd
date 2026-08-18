@@ -23,22 +23,6 @@ jobs:
 
       - name: Create output directory
         run: mkdir -p buildd-results
-      - name: Set Debian changelog version from tag
-        if: startsWith(github.ref, 'refs/tags/')
-        env:
-          TAG_NAME: ${{ github.ref_name }}
-        run: |
-          echo "Tag name: $TAG_NAME"
-          # Use the last path component after any slashes in the tag
-          TAG_BASE="${TAG_NAME##*/}"
-          echo "Using version: $TAG_BASE"
-          sudo apt-get update
-          sudo apt-get install -y devscripts
-          # Create a new changelog entry using the tag as upstream version.
-          # --force-bad-version is used in case the tag contains characters dch doesn't like.
-          dch --create -v "${TAG_BASE}-1" --package flashlightd "Automated build for tag ${TAG_NAME}" --distribution unstable --force-bad-version
-          echo "Updated changelog:"
-          sed -n '1,20p' debian/changelog || true
 
       - name: Build package
         run: |
